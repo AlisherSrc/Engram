@@ -5,12 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.engram.ui.PresqueVuScreen
+import com.example.engram.ui.PresqueVuApp
 import com.example.engram.ui.theme.EngramTheme
 import com.example.engram.viewmodel.PresqueVuViewModel
 
@@ -21,7 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             EngramTheme {
                 val viewModel: PresqueVuViewModel = viewModel()
-                PresqueVuScreen(
+                PresqueVuApp(
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -34,7 +33,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PresqueVuPreview() {
     EngramTheme {
-        PresqueVuScreen(
+        PresqueVuApp(
             viewModel = PresqueVuViewModel(),
             modifier = Modifier.fillMaxSize()
         )

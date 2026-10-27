@@ -7,72 +7,50 @@ import com.example.engram.model.LexiconItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.util.UUID
 
 /**
  * ViewModel for the Presque Vu application.
- * Manages the repository of memory nodes (Constants and Lexicon),
- * active category/tag filters, and provides filtering logic for live search.
+ * Exposes a single [uiState] StateFlow adhering to unidirectional data flow (UDF).
+ * Manages memory nodes (Constants and Lexicon), active filters, search queries,
+ * active recall quiz evaluations, and wordsmith sentence practice history.
  */
 class PresqueVuViewModel : ViewModel() {
 
-    // Master list of vital constants
-    private val _constants = MutableStateFlow<List<ConstantItem>>(initialConstants())
-    val constants: StateFlow<List<ConstantItem>> = _constants.asStateFlow()
+    private val _uiState = MutableStateFlow(
+        PresqueVuUiState(
+            constants = initialConstants(),
+            lexicon = initialLexicon(),
+            spotlightLexiconId = "l-1"
+        )
+    )
+    val uiState: StateFlow<PresqueVuUiState> = _uiState.asStateFlow()
 
-    // Master list of lexicon / wordsmith phrases
-    private val _lexicon = MutableStateFlow<List<LexiconItem>>(initialLexicon())
-    val lexicon: StateFlow<List<LexiconItem>> = _lexicon.asStateFlow()
+    // --- Search & Filter Mutators ---
 
-    // Active category filter for Constants (null = All)
-    private val _selectedConstantCategory = MutableStateFlow<ConstantCategory?>(null)
-    val selectedConstantCategory: StateFlow<ConstantCategory?> = _selectedConstantCategory.asStateFlow()
+    fun setConstantsSearchQuery(query: String) {
+        _uiState.update { it.copy(constantsSearchQuery = query) }
+    }
 
-    // Active filter for Lexicon (Language e.g. "EN", "RU", "KZ" or Tag e.g. "#Sci-Fi", null = All)
-    private val _selectedLexiconFilter = MutableStateFlow<String?>(null)
-    val selectedLexiconFilter: StateFlow<String?> = _selectedLexiconFilter.asStateFlow()
-
-    // --- Filter Management ---
+    fun setLexiconSearchQuery(query: String) {
+        _uiState.update { it.copy(lexiconSearchQuery = query) }
+    }
 
     fun setConstantCategoryFilter(category: ConstantCategory?) {
-        _selectedConstantCategory.value = category
+        _uiState.update { it.copy(selectedConstantCategory = category) }
     }
 
     fun setLexiconFilter(filter: String?) {
-        _selectedLexiconFilter.value = filter
+        _uiState.update { it.copy(selectedLexiconFilter = filter) }
     }
 
-    // --- Filtered List Computation (driven by UI search query + active filters) ---
-
-    fun getFilteredConstants(query: String, category: ConstantCategory? = _selectedConstantCategory.value): List<ConstantItem> {
-        val trimmed = query.trim().lowercase()
-        return _constants.value.filter { item ->
-            val matchesCategory = category == null || item.category == category
-            val matchesQuery = trimmed.isEmpty() ||
-                    item.title.lowercase().contains(trimmed) ||
-                    item.hint.lowercase().contains(trimmed) ||
-                    item.category.displayName.lowercase().contains(trimmed) ||
-                    item.secretValue.lowercase().contains(trimmed)
-            matchesCategory && matchesQuery
-        }
-    }
-
-    fun getFilteredLexicon(query: String, filter: String? = _selectedLexiconFilter.value): List<LexiconItem> {
-        val trimmed = query.trim().lowercase()
-        return _lexicon.value.filter { item ->
-            val matchesFilter = when {
-                filter == null -> true
-                filter.startsWith("#") -> item.tag.equals(filter, ignoreCase = true)
-                else -> item.language.equals(filter, ignoreCase = true)
-            }
-            val matchesQuery = trimmed.isEmpty() ||
-                    item.phrase.lowercase().contains(trimmed) ||
-                    item.meaningOrContext.lowercase().contains(trimmed) ||
-                    item.title.lowercase().contains(trimmed) ||
-                    item.tag.lowercase().contains(trimmed) ||
-                    item.sourceBook.lowercase().contains(trimmed) ||
-                    item.language.lowercase().contains(trimmed)
-            matchesFilter && matchesQuery
+    fun refreshSpotlightPhrase() {
+        val currentLexicon = _uiState.value.lexicon
+        if (currentLexicon.isNotEmpty()) {
+            val remaining = currentLexicon.filter { it.id != _uiState.value.spotlightLexiconId }
+            val next = if (remaining.isNotEmpty()) remaining.random() else currentLexicon.random()
+            _uiState.update { it.copy(spotlightLexiconId = next.id) }
         }
     }
 
@@ -94,7 +72,7 @@ class PresqueVuViewModel : ViewModel() {
             category = category,
             hint = hint.trim()
         )
-        _constants.value = listOf(newItem) + _constants.value
+        _uiState.update { it.copy(constants = listOf(newItem) + it.constants) }
     }
 
     fun addLexicon(
@@ -116,35 +94,92 @@ class PresqueVuViewModel : ViewModel() {
             language = language.trim().uppercase(),
             tag = if (tag.startsWith("#")) tag.trim() else "#${tag.trim()}",
             sourceBook = sourceBook.trim(),
-            )
-        _lexicon.value = listOf(newItem) + _lexicon.value
+            practiceHistory = emptyList()
+        )
+        _uiState.update { it.copy(lexicon = listOf(newItem) + it.lexicon) }
     }
 
     fun incrementConstantMastery(id: String) {
-        _constants.value = _constants.value.map { item ->
-            if (item.id == id) {
-                // Cycle 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 0 for interactive practice
-                val next = if (item.masteryLevel >= 5) 0 else item.masteryLevel + 1
-                item.copy(masteryLevel = next)
-            } else item
+        _uiState.update { state ->
+            state.copy(
+                constants = state.constants.map { item ->
+                    if (item.id == id) {
+                        val next = if (item.masteryLevel >= 5) 0 else item.masteryLevel + 1
+                        item.copy(masteryLevel = next)
+                    } else item
+                }
+            )
         }
     }
 
     fun incrementLexiconMastery(id: String) {
-        _lexicon.value = _lexicon.value.map { item ->
-            if (item.id == id) {
-                val next = if (item.masteryLevel >= 5) 0 else item.masteryLevel + 1
-                item.copy(masteryLevel = next)
-            } else item
+        _uiState.update { state ->
+            state.copy(
+                lexicon = state.lexicon.map { item ->
+                    if (item.id == id) {
+                        val next = if (item.masteryLevel >= 5) 0 else item.masteryLevel + 1
+                        item.copy(masteryLevel = next)
+                    } else item
+                }
+            )
+        }
+    }
+
+    /**
+     * Grades the user's recall of a constant.
+     * Increases mastery if correct (up to 5), or decreases (down to 0) if failed.
+     */
+    fun recordConstantRecallResult(id: String, isCorrect: Boolean) {
+        _uiState.update { state ->
+            state.copy(
+                constants = state.constants.map { item ->
+                    if (item.id == id) {
+                        val updated = if (isCorrect) {
+                            (item.masteryLevel + 1).coerceAtMost(5)
+                        } else {
+                            (item.masteryLevel - 1).coerceAtLeast(0)
+                        }
+                        item.copy(masteryLevel = updated)
+                    } else item
+                }
+            )
+        }
+    }
+
+    /**
+     * Feature 2: Saves the user's original practice sentence into [LexiconItem.practiceHistory]
+     * and reinforces the mastery level by +1.
+     */
+    fun recordLexiconPracticeSentence(id: String, practiceSentence: String) {
+        val trimmed = practiceSentence.trim()
+        if (trimmed.isEmpty()) return
+
+        _uiState.update { state ->
+            state.copy(
+                lexicon = state.lexicon.map { item ->
+                    if (item.id == id) {
+                        val updatedHistory = listOf(trimmed) + item.practiceHistory
+                        val updatedMastery = (item.masteryLevel + 1).coerceAtMost(5)
+                        item.copy(
+                            practiceHistory = updatedHistory,
+                            masteryLevel = updatedMastery
+                        )
+                    } else item
+                }
+            )
         }
     }
 
     fun deleteConstant(id: String) {
-        _constants.value = _constants.value.filterNot { it.id == id }
+        _uiState.update { state ->
+            state.copy(constants = state.constants.filterNot { it.id == id })
+        }
     }
 
     fun deleteLexicon(id: String) {
-        _lexicon.value = _lexicon.value.filterNot { it.id == id }
+        _uiState.update { state ->
+            state.copy(lexicon = state.lexicon.filterNot { it.id == id })
+        }
     }
 
     // --- Initial Mock Data ---
@@ -207,7 +242,10 @@ class PresqueVuViewModel : ViewModel() {
             meaningOrContext = "A transcendent vision of fleeting cosmic beauty disappearing like tears in rain.",
             language = "EN",
             tag = "#Sci-Fi",
-            sourceBook = "Do Androids Dream of Electric Sheep? (Blade Runner)"
+            sourceBook = "Do Androids Dream of Electric Sheep? (Blade Runner)",
+            practiceHistory = listOf(
+                "As the midnight train crossed the viaduct, lights flickered like C-beams near the Tannhäuser Gate."
+            )
         ),
         LexiconItem(
             id = "l-2",
@@ -218,7 +256,10 @@ class PresqueVuViewModel : ViewModel() {
             meaningOrContext = "An iconic cyberpunk opening establishing an oppressive, electric, technological atmosphere.",
             language = "EN",
             tag = "#Atmosphere",
-            sourceBook = "Neuromancer (William Gibson)"
+            sourceBook = "Neuromancer (William Gibson)",
+            practiceHistory = listOf(
+                "Stepping onto the industrial rooftop, the static sky felt tuned to a dead channel."
+            )
         ),
         LexiconItem(
             id = "l-3",
@@ -229,7 +270,8 @@ class PresqueVuViewModel : ViewModel() {
             meaningOrContext = "Предельное выражение бескорыстной человеческой надежды перед лицом непостижимой Зоны.",
             language = "RU",
             tag = "#Sci-Fi",
-            sourceBook = "Пикник на обочине (А. и Б. Стругацкие)"
+            sourceBook = "Пикник на обочине (А. и Б. Стругацкие)",
+            practiceHistory = emptyList()
         ),
         LexiconItem(
             id = "l-4",
@@ -240,7 +282,8 @@ class PresqueVuViewModel : ViewModel() {
             meaningOrContext = "Жас әрі қажырлы тұлпардай тыным таппай, еркіндікке ұмтылған шабыт пен көтеріңкі рухты сипаттау.",
             language = "KZ",
             tag = "#Atmosphere",
-            sourceBook = "Қазақ классикалық әдебиеті"
+            sourceBook = "Қазақ классикалық әдебиеті",
+            practiceHistory = emptyList()
         ),
         LexiconItem(
             id = "l-5",
@@ -251,7 +294,8 @@ class PresqueVuViewModel : ViewModel() {
             meaningOrContext = "Шексіз ғарыш кеңістігіндегі тыныштық пен адам баласының ғаламдағы орны туралы философиялық ой толғау.",
             language = "KZ",
             tag = "#Sci-Fi",
-            sourceBook = "Ғарыштық хикаялар жинағы"
+            sourceBook = "Ғарыштық хикаялар жинағы",
+            practiceHistory = emptyList()
         ),
         LexiconItem(
             id = "l-6",
@@ -262,7 +306,8 @@ class PresqueVuViewModel : ViewModel() {
             meaningOrContext = "Осознание вечности универсальных истин сквозь призму личного сиюминутного опыта.",
             language = "RU",
             tag = "#Idiom",
-            sourceBook = "Философские размышления"
+            sourceBook = "Философские размышления",
+            practiceHistory = emptyList()
         )
     )
 }

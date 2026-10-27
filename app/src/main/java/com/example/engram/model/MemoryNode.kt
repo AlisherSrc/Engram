@@ -47,5 +47,6 @@ data class LexiconItem(
     val meaningOrContext: String,
     val language: String, // e.g. "EN", "RU", "KZ"
     val tag: String,      // e.g. "#Sci-Fi", "#Atmosphere", "#Idiom"
-    val sourceBook: String
+    val sourceBook: String,
+    val practiceHistory: List<String> = emptyList()
 ) : MemoryNode

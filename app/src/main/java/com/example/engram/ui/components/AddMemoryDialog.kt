@@ -16,8 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.DataObject
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,8 +30,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -140,9 +140,8 @@ fun AddMemoryDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Segmented Tab Selector (Constant vs. Lexicon)
-                TabRow(
+                PrimaryTabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.clip(RoundedCornerShape(14.dp))
                 ) {
                     Tab(
@@ -155,7 +154,7 @@ fun AddMemoryDialog(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
                         text = { Text("Lexicon (Wordsmith)") },
-                        icon = { Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(18.dp)) }
                     )
                 }
 
